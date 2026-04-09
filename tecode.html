@@ -236,8 +236,6 @@ function TeCode(){
           <Field label="Password *" type="password" value={view==="login"?lf.p:sf.p} onChange={v=>view==="login"?setLf(p=>({...p,p:v})):setSf(p=>({...p,p:v}))} placeholder="••••••••" onEnter={view==="login"?doLogin:doSignup}/>
           <Btn onClick={view==="login"?doLogin:doSignup} full sx={{marginTop:4,padding:"14px",fontSize:15}}>{view==="login"?"Sign In →":"Create Account →"}</Btn>
           {view==="login"&&<div style={{textAlign:"center",marginTop:14,color:"#4b5273",fontSize:12}}>
-            Quick demo: <span style={{color:"#4facfe",cursor:"pointer"}} onClick={()=>{setLf({u:"alice",p:"pass"});setTimeout(doLogin,50);}}>alice / pass</span>
-            {" · "}<span style={{color:"#ffa502",cursor:"pointer"}} onClick={()=>{setLf({u:"owner",p:"owner123"});setTimeout(doLogin,50);}}>owner / owner123 (admin)</span>
           </div>}
         </div>
       </div>
