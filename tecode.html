@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Tecode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700;800&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#07090f;font-family:'Jost',sans-serif;overflow-x:hidden}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-thumb{background:#252a3d;border-radius:2px}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes glow{0%,100%{box-shadow:0 0 20px #4facfe20}50%{box-shadow:0 0 40px #4facfe40}}
+input,textarea,select{font-family:'Jost',sans-serif}
+button{font-family:'Oxanium',monospace}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef}=React;
+
+/* ── SEED DATA ── */
+const INIT_USERS=[
+  {id:"owner",username:"owner",displayName:"te-code-owner",password:"owner123",bio:"Platform administrator.",banner:"g0",pic:null,isAdmin:true,online:true},
+  {id:"alice",username:"alice",displayName:"Alice Chen",password:"pass",bio:"Designer & dreamer ✨",banner:"g1",pic:null,isAdmin:false,online:true},
+  {id:"bob",username:"bob",displayName:"Bob Silva",password:"pass",bio:"Code & coffee ☕",banner:null,pic:null,isAdmin:false,online:false},
+  {id:"carol",username:"carol",displayName:"Carol K.",password:"pass",bio:"Just vibing 🎵",banner:null,pic:null,isAdmin:false,online:true},
+];
+const AI_BOT={id:"__ai__",username:"tecode-ai",displayName:"Tecode AI",bio:"Your intelligent AI companion. Ask me anything!",pic:null,online:true,isAI:true,isAdmin:false,banner:"g2"};
+const INIT_FRIENDS=[["alice","bob"],["alice","carol"]];
+const INIT_MSGS={"alice||bob":[
+  {id:"m1",from:"bob",text:"Hey! Welcome to Tecode 🚀",ts:Date.now()-7200e3,seen:true,reply:null,incog:false,selfD:false},
+  {id:"m2",from:"alice",text:"This is amazing! Love the design ❤️",ts:Date.now()-7100e3,seen:true,reply:null,incog:false,selfD:false},
+]};
+const GRADS=["linear-gradient(135deg,#0f2027,#203a43,#2c5364)","linear-gradient(135deg,#1a1a2e,#16213e,#0f3460)","linear-gradient(135deg,#4facfe,#00f2fe)","linear-gradient(135deg,#43e97b,#38f9d7)","linear-gradient(135deg,#fa709a,#fee140)","linear-gradient(135deg,#a18cd1,#fbc2eb)","linear-gradient(135deg,#f093fb,#f5576c)","linear-gradient(135deg,#30cfd0,#330867)"];
+const AV_G=["linear-gradient(135deg,#4facfe,#00f2fe)","linear-gradient(135deg,#f093fb,#f5576c)","linear-gradient(135deg,#43e97b,#38f9d7)","linear-gradient(135deg,#fa709a,#fee140)","linear-gradient(135deg,#667eea,#764ba2)","linear-gradient(135deg,#30cfd0,#330867)"];
+
+/* ── UTILS ── */
+const cid=(a,b)=>[a,b].sort().join("||");
+const tfmt=t=>{const d=new Date(t),n=new Date();return d.toDateString()===n.toDateString()?d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):d.toLocaleDateString([],{month:"short",day:"numeric"});};
+const avGr=id=>AV_G[(id||"x").charCodeAt(0)%AV_G.length];
+const bnr=key=>key?.startsWith("g")?GRADS[parseInt(key.slice(1))%GRADS.length]:key||"linear-gradient(135deg,#1a1d26,#0f1219)";
+const cdLeft=(cds,from,to)=>{const c=cds.find(x=>x.from===from&&x.to===to);return c?Math.max(0,Math.ceil((c.until-Date.now())/1000)):0;};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+/* ── AVATAR ── */
+function Av({user,size=36,sx={}}){
+  if(!user)return React.createElement("div",{style:{width:size,height:size,borderRadius:"50%",background:"#1e2535",flexShrink:0,...sx}});
+  if(user.id==="__ai__")return React.createElement("div",{style:{width:size,height:size,borderRadius:"50%",background:"linear-gradient(135deg,#4facfe,#00f2fe)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*.42,flexShrink:0,...sx}},"✦");
+  const init=(user.displayName||user.username||"?")[0].toUpperCase();
+  if(user.pic)return React.createElement("img",{src:user.pic,style:{width:size,height:size,borderRadius:"50%",objectFit:"cover",flexShrink:0,...sx}});
+  return React.createElement("div",{style:{width:size,height:size,borderRadius:"50%",background:avGr(user.id),display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*.38,color:"#fff",fontFamily:"Oxanium,monospace",fontWeight:700,flexShrink:0,...sx}},init);
+}
+
+/* ── DOT ── */
+const Dot=({on,sx={}})=>React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:on?"#2ed573":"#444",flexShrink:0,...sx}});
+
+/* ── BTN ── */
+function Btn({children,onClick,v="primary",sm,full,sx={}}){
+  const base={border:"none",borderRadius:8,cursor:"pointer",fontFamily:"Oxanium,monospace",fontWeight:700,fontSize:sm?12:14,padding:sm?"6px 12px":"11px 22px",transition:"all .18s",display:"inline-flex",alignItems:"center",gap:6,justifyContent:"center",width:full?"100%":"auto",...sx};
+  const vs={primary:{background:"linear-gradient(135deg,#4facfe,#00f2fe)",color:"#07090f"},ghost:{background:"transparent",color:"#4facfe",border:"1px solid #4facfe40"},danger:{background:"#ff475718",color:"#ff6b7a",border:"1px solid #ff475740"},success:{background:"#2ed57318",color:"#2ed573",border:"1px solid #2ed57340"},muted:{background:"#1e2535",color:"#7a8499"},pink:{background:"linear-gradient(135deg,#ff85c2,#ff69b4)",color:"#fff"},pinkg:{background:"transparent",color:"#ff69b4",border:"1px solid #ff69b440"}};
+  const [hover,setHover]=useState(false);
+  return React.createElement("button",{onClick,style:{...base,...vs[v],opacity:hover?.85:1,transform:hover?"translateY(-1px)":"none"},onMouseEnter:()=>setHover(true),onMouseLeave:()=>setHover(false)},children);
+}
+
+/* ── FIELD ── */
+function Field({label,value,onChange,type="text",placeholder="",onEnter,sx={}}){
+  const [foc,setFoc]=useState(false);
+  const bdr=foc?"#4facfe":"#252a3d";
+  if(type==="file")return React.createElement("div",{style:{marginBottom:14,...sx}},
+    label&&React.createElement("div",{style:{fontSize:12,color:"#6b7299",marginBottom:6}},label),
+    React.createElement("input",{type:"file",accept:"image/*",onChange:e=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=ev=>onChange(ev.target.result);r.readAsDataURL(f);}},style:{color:"#6b7299",fontSize:13,width:"100%"}})
+  );
+  if(type==="textarea")return React.createElement("div",{style:{marginBottom:14,...sx}},
+    label&&React.createElement("div",{style:{fontSize:12,color:"#6b7299",marginBottom:6}},label),
+    React.createElement("textarea",{value:value||"",placeholder,onChange:e=>onChange(e.target.value),rows:3,onFocus:()=>setFoc(true),onBlur:()=>setFoc(false),style:{width:"100%",padding:"11px 14px",background:"#07090f",border:`1px solid ${bdr}`,borderRadius:8,color:"#e8eaf0",fontSize:14,outline:"none",resize:"vertical",boxSizing:"border-box",transition:"border-color .2s"}})
+  );
+  return React.createElement("div",{style:{marginBottom:14,...sx}},
+    label&&React.createElement("div",{style:{fontSize:12,color:"#6b7299",marginBottom:6}},label),
+    React.createElement("input",{type,value:value||"",placeholder,onChange:e=>onChange(e.target.value),onKeyDown:e=>e.key==="Enter"&&onEnter&&onEnter(),onFocus:()=>setFoc(true),onBlur:()=>setFoc(false),style:{width:"100%",padding:"11px 14px",background:"#07090f",border:`1px solid ${bdr}`,borderRadius:8,color:"#e8eaf0",fontSize:14,outline:"none",boxSizing:"border-box",transition:"border-color .2s"}})
+  );
+}
+
+/* ── TOAST ── */
+function Toast({msg,type}){
+  const c={info:"#4facfe",success:"#2ed573",warn:"#ffa502",error:"#ff4757"}[type]||"#4facfe";
+  return React.createElement("div",{style:{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:"#161c28",border:`1px solid ${c}50`,borderRadius:12,padding:"12px 20px",color:c,fontSize:13,zIndex:9999,display:"flex",alignItems:"center",gap:8,maxWidth:"90vw",boxShadow:`0 8px 32px #00000080`,animation:"fadeIn .2s",whiteSpace:"nowrap"}},
+    React.createElement("span",null,{success:"✓",warn:"⚠",error:"✕",info:"ℹ"}[type]||"ℹ"),msg
+  );
+}
+
+/* ══════════════════════════════════════════════
+   MAIN APP
+══════════════════════════════════════════════ */
+function TeCode(){
+  const [view,setView]=useState("login");
+  const [me,setMe]=useState(null);
+  const [lf,setLf]=useState({u:"",p:""});
+  const [sf,setSf]=useState({u:"",dn:"",p:"",pic:null});
+  const [aErr,setAErr]=useState("");
+  const [users,setUsers]=useState(INIT_USERS);
+  const [friends,setFriends]=useState(INIT_FRIENDS);
+  const [reqs,setReqs]=useState([]);
+  const [cds,setCds]=useState([]);
+  const [msgs,setMsgs]=useState(INIT_MSGS);
+  const [bans,setBans]=useState([]);
+  const [sidebar,setSidebar]=useState(false);
+  const [dashTab,setDashTab]=useState("friends");
+  const [chatPeer,setChatPeer]=useState(null);
+  const [incog,setIncog]=useState(false);
+  const [input,setInput]=useState("");
+  const [replyTo,setReplyTo]=useState(null);
+  const [callUI,setCallUI]=useState(null);
+  const [callSec,setCallSec]=useState(0);
+  const [uSearch,setUSearch]=useState("");
+  const [adSearch,setAdSearch]=useState("");
+  const [adminTab,setAdminTab]=useState("users");
+  const [profEdit,setProfEdit]=useState(null);
+  const [viewProf,setViewProf]=useState(null);
+  const [aiLoad,setAiLoad]=useState(false);
+  const [banForm,setBanForm]=useState({uid:"",dur:"perm",reason:""});
+  const [addAdmF,setAddAdmF]=useState({u:"",dn:"",p:""});
+  const [toast,setToast]=useState(null);
+  const msgEnd=useRef(null);
+
+  useEffect(()=>{const t=setInterval(()=>setCds(p=>p.filter(c=>c.until>Date.now())),500);return()=>clearInterval(t);},[]);
+  useEffect(()=>{msgEnd.current?.scrollIntoView({behavior:"smooth"});},[msgs,chatPeer,view]);
+  useEffect(()=>{if(toast){const t=setTimeout(()=>setToast(null),3000);return()=>clearTimeout(t);}},[toast]);
+  useEffect(()=>{if(!callUI||callUI.state!=="active")return;const t=setInterval(()=>setCallSec(p=>p+1),1000);return()=>clearInterval(t);},[callUI]);
+
+  const getU=id=>id==="__ai__"?AI_BOT:users.find(u=>u.id===id);
+  const isFr=(a,b)=>friends.some(f=>(f[0]===a&&f[1]===b)||(f[0]===b&&f[1]===a));
+  const isBan=id=>{const b=bans.find(x=>x.userId===id);if(!b)return false;if(b.until==="perm")return true;return b.until>Date.now();};
+  const myFr=()=>me?friends.filter(f=>f.includes(me.id)).map(f=>f[0]===me.id?f[1]:f[0]).map(getU).filter(Boolean):[];
+  const myReqs=()=>reqs.filter(r=>r.to===me?.id);
+  const convMs=peer=>msgs[cid(me?.id,peer)]||[];
+  const showT=(msg,type="info")=>setToast({msg,type});
+  const fmtT=s=>`${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+  const isMobile=()=>window.innerWidth<700;
+
+  /* Auth */
+  const doLogin=()=>{
+    const u=users.find(x=>x.username===lf.u&&x.password===lf.p);
+    if(!u){setAErr("Invalid username or password.");return;}
+    if(isBan(u.id)){setAErr("Your account has been banned.");return;}
+    setMe({...u});setView("dashboard");setAErr("");setLf({u:"",p:""});
+  };
+  const doSignup=()=>{
+    if(!sf.u||!sf.dn||!sf.p){setAErr("Fill all required fields.");return;}
+    if(users.find(x=>x.username===sf.u)){setAErr("Username taken.");return;}
+    const nu={id:sf.u,username:sf.u,displayName:sf.dn,password:sf.p,bio:"",banner:null,pic:sf.pic,isAdmin:false,online:true};
+    setUsers(p=>[...p,nu]);setMe(nu);setView("dashboard");setAErr("");
+  };
+
+  /* Friends */
+  const sendReq=toId=>{
+    const left=cdLeft(cds,me.id,toId);
+    if(left>0){showT(`Wait ${left}s before re-requesting.`,"warn");return;}
+    if(isFr(me.id,toId)){showT("Already friends!","info");return;}
+    if(reqs.find(r=>r.from===me.id&&r.to===toId)){showT("Request already sent.","info");return;}
+    setReqs(p=>[...p,{id:uid(),from:me.id,to:toId}]);showT("Friend request sent! ✓","success");
+  };
+  const acceptReq=id=>{const r=reqs.find(x=>x.id===id);if(!r)return;setFriends(p=>[...p,[r.from,r.to]]);setReqs(p=>p.filter(x=>x.id!==id));showT("Friend added!","success");};
+  const ignoreReq=id=>{const r=reqs.find(x=>x.id===id);if(!r)return;setCds(p=>[...p,{from:r.from,to:r.to,until:Date.now()+60000}]);setReqs(p=>p.filter(x=>x.id!==id));};
+  const removeFr=uid_=>setFriends(p=>p.filter(f=>!(f.includes(me.id)&&f.includes(uid_))));
+
+  /* Messages */
+  const sendMsg=async()=>{
+    if(!input.trim())return;
+    const convId=cid(me.id,chatPeer);
+    const m={id:uid(),from:me.id,text:input,ts:Date.now(),seen:false,reply:replyTo,incog,selfD:incog};
+    setMsgs(p=>({...p,[convId]:[...(p[convId]||[]),m]}));
+    const txt=input;setInput("");setReplyTo(null);
+    if(chatPeer==="__ai__"){
+      setAiLoad(true);
+      try{
+        const history=(msgs[convId]||[]).slice(-10).map(x=>({role:x.from===me.id?"user":"assistant",content:x.text}));
+        const resp=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:"You are Tecode AI, the smart assistant built into Tecode messaging app. Be helpful, friendly and concise.",messages:[...history,{role:"user",content:txt}]})});
+        const data=await resp.json();
+        const aiTxt=data.content?.[0]?.text||"Sorry, couldn't respond right now.";
+        setMsgs(p=>({...p,[convId]:[...(p[convId]||[]),{id:uid(),from:"__ai__",text:aiTxt,ts:Date.now(),seen:false,reply:null,incog:false,selfD:false}]}));
+      }catch{
+        setMsgs(p=>({...p,[convId]:[...(p[convId]||[]),{id:uid(),from:"__ai__",text:"⚠️ Connection error.",ts:Date.now(),seen:false,reply:null,incog:false,selfD:false}]}));
+      }
+      setAiLoad(false);
+    }
+  };
+  const markSeen=(convId,msgId)=>setMsgs(p=>{const list=p[convId]||[];return {...p,[convId]:list.map(m=>{if(m.id!==msgId||m.seen)return m;if(m.selfD)return null;return{...m,seen:true};}).filter(Boolean)};});
+  const openChat=peerId=>{setChatPeer(peerId);setIncog(false);setView("chat");setSidebar(false);setTimeout(()=>{const cv=cid(me.id,peerId);(msgs[cv]||[]).forEach(m=>{if(m.from!==me.id&&!m.seen)markSeen(cv,m.id);});},400);};
+
+  /* Profile */
+  const saveProfile=()=>{
+    if(!profEdit)return;
+    if(profEdit.newPw){if(profEdit.curPw!==me.password){showT("Current password incorrect.","error");return;}if(profEdit.newPw!==profEdit.conPw){showT("Passwords don't match.","error");return;}}
+    const upd={...me,displayName:profEdit.dn||me.displayName,username:profEdit.un||me.username,bio:profEdit.bio??me.bio,pic:profEdit.pic??me.pic,banner:profEdit.banner??me.banner,...(profEdit.newPw?{password:profEdit.newPw}:{})};
+    setUsers(p=>p.map(u=>u.id===me.id?upd:u));setMe(upd);setProfEdit(null);setView("dashboard");showT("Profile updated! ✓","success");
+  };
+
+  /* Admin */
+  const doBan=(userId,dur,reason)=>{const until=dur==="perm"?"perm":Date.now()+parseInt(dur)*60000;setBans(p=>[...p.filter(b=>b.userId!==userId),{userId,until,reason}]);showT("User banned.","success");};
+  const doUnban=userId=>{setBans(p=>p.filter(b=>b.userId!==userId));showT("User unbanned.","success");};
+  const doAddAdmin=()=>{
+    if(!addAdmF.u||!addAdmF.p){showT("Username & password required.","warn");return;}
+    if(users.find(u=>u.username===addAdmF.u)){setUsers(p=>p.map(u=>u.username===addAdmF.u?{...u,isAdmin:true}:u));showT("Granted admin.","success");}
+    else{const nu={id:addAdmF.u,username:addAdmF.u,displayName:addAdmF.dn||"te-code-owner",password:addAdmF.p,bio:"",banner:null,pic:null,isAdmin:true,online:false};setUsers(p=>[...p,nu]);showT("Admin created.","success");}
+    setAddAdmF({u:"",dn:"",p:""});
+  };
+
+  /* ── RENDER AUTH ── */
+  if(view==="login"||view==="signup") return (
+    <div style={{minHeight:"100vh",background:"#07090f",display:"flex",alignItems:"center",justifyContent:"center",padding:20,position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:-150,left:"50%",transform:"translateX(-50%)",width:700,height:350,background:"radial-gradient(ellipse,#4facfe0d,transparent 70%)",pointerEvents:"none"}}/>
+      <div style={{width:"100%",maxWidth:420,animation:"fadeIn .4s"}}>
+        <div style={{textAlign:"center",marginBottom:40}}>
+          <div style={{fontSize:54,fontFamily:"Oxanium,monospace",fontWeight:800,background:"linear-gradient(135deg,#4facfe,#00f2fe)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",letterSpacing:"-2px"}}>tecode</div>
+          <div style={{color:"#4facfe80",fontSize:11,letterSpacing:5,textTransform:"uppercase",marginTop:4}}>connect beyond limits</div>
+        </div>
+        <div style={{display:"flex",background:"#0e1219",borderRadius:12,padding:4,marginBottom:24,border:"1px solid #1e2535"}}>
+          {["login","signup"].map(t=>(
+            <button key={t} onClick={()=>{setView(t);setAErr("");}} style={{flex:1,padding:"10px",borderRadius:8,border:"none",background:view===t?"linear-gradient(135deg,#4facfe,#00f2fe)":"transparent",color:view===t?"#07090f":"#6b7299",fontFamily:"Oxanium,monospace",fontWeight:700,fontSize:14,cursor:"pointer",transition:"all .2s"}}>
+              {t==="login"?"Sign In":"Sign Up"}
+            </button>
+          ))}
+        </div>
+        <div style={{background:"#0e1219",borderRadius:16,padding:28,border:"1px solid #1e2535",boxShadow:"0 24px 60px #000a"}}>
+          {aErr&&<div style={{background:"#ff475718",border:"1px solid #ff475740",borderRadius:8,padding:"10px 14px",color:"#ff6b7a",fontSize:13,marginBottom:16}}>{aErr}</div>}
+          {view==="signup"&&<><Field label="Display Name *" value={sf.dn} onChange={v=>setSf(p=>({...p,dn:v}))} placeholder="How others see you"/><Field label="Profile Picture" type="file" onChange={v=>setSf(p=>({...p,pic:v}))}/></>}
+          <Field label="Username *" value={view==="login"?lf.u:sf.u} onChange={v=>view==="login"?setLf(p=>({...p,u:v})):setSf(p=>({...p,u:v}))} placeholder="@username"/>
+          <Field label="Password *" type="password" value={view==="login"?lf.p:sf.p} onChange={v=>view==="login"?setLf(p=>({...p,p:v})):setSf(p=>({...p,p:v}))} placeholder="••••••••" onEnter={view==="login"?doLogin:doSignup}/>
+          <Btn onClick={view==="login"?doLogin:doSignup} full sx={{marginTop:4,padding:"14px",fontSize:15}}>{view==="login"?"Sign In →":"Create Account →"}</Btn>
+          {view==="login"&&<div style={{textAlign:"center",marginTop:14,color:"#4b5273",fontSize:12}}>
+            Quick demo: <span style={{color:"#4facfe",cursor:"pointer"}} onClick={()=>{setLf({u:"alice",p:"pass"});setTimeout(doLogin,50);}}>alice / pass</span>
+            {" · "}<span style={{color:"#ffa502",cursor:"pointer"}} onClick={()=>{setLf({u:"owner",p:"owner123"});setTimeout(doLogin,50);}}>owner / owner123 (admin)</span>
+          </div>}
+        </div>
+      </div>
+    </div>
+  );
+
+  /* ── RENDER PROFILE VIEW ── */
+  if(viewProf){const u=viewProf;return(
+    <div style={{background:"#07090f",minHeight:"100vh",animation:"fadeIn .2s"}}>
+      <div style={{height:140,background:bnr(u.banner||"g0"),position:"relative"}}>
+        <button onClick={()=>setViewProf(null)} style={{position:"absolute",top:12,left:12,background:"#00000070",border:"none",borderRadius:8,color:"#fff",padding:"7px 16px",cursor:"pointer",fontFamily:"Oxanium,monospace",fontSize:13}}>← Back</button>
+        {u.id===me?.id&&<button onClick={()=>{setProfEdit({dn:me.displayName,un:me.username,bio:me.bio,pic:me.pic,banner:me.banner,curPw:"",newPw:"",conPw:""});setViewProf(null);setView("profile");}} style={{position:"absolute",top:12,right:12,background:"#00000070",border:"none",borderRadius:8,color:"#fff",padding:"7px 16px",cursor:"pointer",fontFamily:"Oxanium,monospace",fontSize:13}}>✏ Edit</button>}
+      </div>
+      <div style={{padding:"0 20px 24px",maxWidth:600,margin:"0 auto"}}>
+        <div style={{display:"flex",alignItems:"flex-end",gap:14,marginBottom:16,marginTop:-36}}>
+          <Av user={u} size={72} sx={{border:"3px solid #07090f"}}/>
+          <div style={{paddingBottom:8}}>
+            <div style={{fontFamily:"Oxanium,monospace",fontWeight:700,fontSize:22,color:"#e8eaf0"}}>{u.displayName}</div>
+            <div style={{color:"#4b5273",fontSize:13}}>@{u.username}</div>
+          </div>
+          <div style={{marginLeft:"auto",paddingBottom:8,display:"flex",alignItems:"center",gap:8}}>
+            {u.isAdmin&&<span style={{fontSize:11,background:"#ffa50220",color:"#ffa502",border:"1px solid #ffa50230",borderRadius:4,padding:"2px 7px",fontWeight:700}}>Admin</span>}
+            <Dot on={u.online}/><span style={{fontSize:12,color:u.online?"#2ed573":"#6b7299"}}>{u.online?"Online":"Offline"}</span>
+          </div>
+        </div>
+        {u.bio&&<div style={{background:"#0e1219",borderRadius:10,padding:"12px 16px",color:"#a0a8bf",fontSize:14,marginBottom:16,border:"1px solid #1e2535"}}>{u.bio}</div>}
+        {me&&u.id!==me.id&&<div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          {isFr(me.id,u.id)?<><Btn onClick={()=>{openChat(u.id);setViewProf(null);}}>💬 Message</Btn><Btn onClick={()=>{removeFr(u.id);setViewProf(null);}} v="danger" sm>Remove Friend</Btn></>:
+           reqs.find(r=>r.from===me.id&&r.to===u.id)?<span style={{fontSize:12,background:"#ffa50218",color:"#ffa502",border:"1px solid #ffa50230",borderRadius:6,padding:"6px 14px"}}>Request Sent</span>:
+           <Btn onClick={()=>sendReq(u.id)} v="ghost">Add Friend +</Btn>}
+        </div>}
+      </div>
+      {toast&&<Toast {...toast}/>}
+    </div>
+  );}
+
+  /* ── RENDER PROFILE EDIT ── */
+  if(view==="profile"&&profEdit) return(
+    <div style={{background:"#07090f",minHeight:"100vh",animation:"fadeIn .2s"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,padding:"0 16px",height:56,borderBottom:"1px solid #1e2535",background:"#0a0c14"}}>
+        <button onClick={()=>{setProfEdit(null);setView("dashboard");}} style={{background:"none",border:"none",color:"#4facfe",cursor:"pointer",fontSize:20,padding:"4px 8px"}}>←</button>
+        <span style={{fontFamily:"Oxanium,monospace",fontWeight:700,fontSize:18,color:"#e8eaf0"}}>Edit Profile</span>
+      </div>
+      <div style={{padding:20,maxWidth:500,margin:"0 auto"}}>
+        <div style={{height:100,borderRadius:12,background:bnr(profEdit?.banner??me.banner),marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center",gap:8,flexWrap:"wrap",position:"relative"}}>
+          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",gap:8,flexWrap:"wrap",padding:8}}>
+            {GRADS.map((g,i)=><div key={i} onClick={()=>setProfEdit(p=>({...p,banner:`g${i}`}))} style={{width:26,height:26,borderRadius:"50%",background:g,cursor:"pointer",border:profEdit?.banner===`g${i}`?"3px solid #fff":"3px solid transparent",transition:"border .15s"}}/>)}
+          </div>
+        </div>
+        <Field label="Display Name" value={profEdit?.dn} onChange={v=>setProfEdit(p=>({...p,dn:v}))} placeholder={me.displayName}/>
+        <Field label="Username" value={profEdit?.un} onChange={v=>setProfEdit(p=>({...p,un:v}))} placeholder={me.username}/>
+        <Field label="Bio" type="textarea" value={profEdit?.bio} onChange={v=>setProfEdit(p=>({...p,bio:v}))} placeholder="Tell the world about yourself…"/>
+        <Field label="Profile Picture" type="file" onChange={v=>setProfEdit(p=>({...p,pic:v}))}/>
+        <div style={{borderTop:"1px solid #1e2535",paddingTop:16,marginTop:4,marginBottom:16}}>
+          <div style={{fontSize:11,color:"#3d4460",letterSpacing:2,textTransform:"uppercase",fontFamily:"Oxanium,monospace",marginBottom:12}}>Change Password</div>
+          <Field label="Current Password" type="password" value={profEdit?.curPw} onChange={v=>setProfEdit(p=>({...p,curPw:v}))} placeholder="••••••••"/>
+          <Field label="New Password" type="password" value={profEdit?.newPw} onChange={v=>setProfEdit(p=>({...p,newPw:v}))} placeholder="••••••••"/>
+          <Field label="Confirm Password" type="password" value={profEdit?.conPw} onChange={v=>setProfEdit(p=>({...p,conPw:v}))} placeholder="••••••••"/>
+        </div>
+        <Btn onClick={saveProfile} full>Save Changes ✓</Btn>
+      </div>
+      {toast&&<Toast {...toast}/>}
+    </div>
+  );
+
+  /* ── RENDER ADMIN ── */
+  if(view==="admin"&&me?.isAdmin){
+    const filt=users.filter(u=>u.id!=="__ai__"&&(u.username.includes(adSearch)||u.displayName.toLowerCase().includes(adSearch.toLowerCase())));
+    return(
+      <div style={{display:"flex",height:"100vh",background:"#07090f",overflow:"hidden"}}>
+        <div style={{width:220,background:"#0a0c14",borderRight:"1px solid #1e2535",display:"flex",flexDirection:"column",flexShrink:0}}>
+          <div style={{padding:"16px",borderBottom:"1px solid #1e2535"}}>
+            <div style={{fontFamily:"Oxanium,monospace",fontWeight:800,fontSize:17,color:"#ffa502"}}>🛡 Admin Panel</div>
+            <div style={{fontSize:11,color:"#4b5273",marginTop:2}}>@{me.username}</div>
+          </div>
+          <nav style={{flex:1,padding:"8px 0"}}>
+            {[{id:"users",l:"Users",ic:"👤"},{id:"bans",l:"Bans",ic:"🚫"},{id:"addadmin",l:"Add Admin",ic:"➕"},{id:"switch",l:"Switch Account",ic:"🔄"}].map(t=>(
+              <button key={t.id} onClick={()=>setAdminTab(t.id)} style={{width:"100%",padding:"10px 16px",background:adminTab===t.id?"#1e2535":"transparent",border:"none",display:"flex",alignItems:"center",gap:10,cursor:"pointer",color:adminTab===t.id?"#ffa502":"#6b7299",fontSize:14,fontFamily:"Jost,sans-serif",transition:"all .15s"}}>
+                <span style={{fontSize:15}}>{t.ic}</span>{t.l}
+              </button>
+            ))}
+          </nav>
+          <div style={{padding:"10px 16px",borderTop:"1px solid #1e2535"}}><Btn onClick={()=>setView("dashboard")} v="ghost" sm full>← Dashboard</Btn></div>
+        </div>
+        <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          <div style={{padding:"0 20px",height:56,borderBottom:"1px solid #1e2535",display:"flex",alignItems:"center",background:"#0a0c14"}}>
+            <span style={{fontFamily:"Oxanium,monospace",fontWeight:700,color:"#e8eaf0",fontSize:16}}>{{users:"User Management",bans:"Bans",addadmin:"Add Admin",switch:"Switch Account"}[adminTab]}</span>
+          </div>
+          <div style={{flex:1,overflowY:"auto",padding:20}}>
+            {adminTab==="users"&&<>
+              <Field value={adSearch} onChange={setAdSearch} placeholder="Search users…" sx={{maxWidth:400,marginBottom:16}}/>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {filt.map(u=>{const banned=isBan(u.id);return(
+                  <div key={u.id} style={{background:"#0e1219",border:`1px solid ${banned?"#ff475730":"#1e2535"}`,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
+                    <Av user={u} size={44}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                        <span style={{fontWeight:600,color:"#e8eaf0",fontSize:15}}>{u.displayName}</span>
+                        {u.isAdmin&&<span style={{fontSize:11,background:"#ffa50220",color:"#ffa502",borderRadius:4,padding:"1px 6px"}}>Admin</span>}
+                        {banned&&<span style={{fontSize:11,background:"#ff475720",color:"#ff4757",borderRadius:4,padding:"1px 6px"}}>Banned</span>}
+                      </div>
+                      <div style={{color:"#4b5273",fontSize:12}}>@{u.username}</div>
+                    </div>
+                    {u.id!==me.id&&(banned?<Btn onClick={()=>doUnban(u.id)} v="success" sm>Unban</Btn>:<Btn onClick={()=>{setBanForm({uid:u.id,dur:"perm",reason:""});setAdminTab("bans");}} v="danger" sm>Ban</Btn>)}
+                  </div>
+                );})}
+              </div>
+            </>}
+            {adminTab==="bans"&&<>
+              <div style={{background:"#0e1219",borderRadius:12,padding:20,border:"1px solid #1e2535",maxWidth:440,marginBottom:20}}>
+                <div style={{fontFamily:"Oxanium,monospace",fontWeight:700,color:"#e8eaf0",fontSize:14,marginBottom:14}}>Ban a User</div>
+                <Field label="Username" value={banForm.uid} onChange={v=>setBanForm(p=>({...p,uid:v}))} placeholder="Enter username"/>
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:12,color:"#6b7299",marginBottom:6}}>Duration</div>
+                  <select value={banForm.dur} onChange={e=>setBanForm(p=>({...p,dur:e.target.value}))} style={{width:"100%",padding:"11px 14px",background:"#07090f",border:"1px solid #252a3d",borderRadius:8,color:"#e8eaf0",fontSize:14,outline:"none"}}>
+                    <option value="perm">Permanent</option><option value="60">1 Hour</option><option value="1440">1 Day</option><option value="10080">1 Week</option>
+                  </select>
+                </div>
+                <Field label="Reason" type="textarea" value={banForm.reason} onChange={v=>setBanForm(p=>({...p,reason:v}))} placeholder="Reason for ban…"/>
+                <Btn onClick={()=>{const u=users.find(x=>x.username===banForm.uid||x.id===banForm.uid);if(!u){showT("User not found.","error");return;}doBan(u.id,banForm.dur,banForm.reason);setBanForm({uid:"",dur:"perm",reason:""}); }} v="danger" full>Apply Ban</Btn>
+              </div>
+              <div style={{fontFamily:"Oxanium,monospace",fontWeight:700,color:"#e8eaf0",fontSize:13,marginBottom:10}}>Active Bans</div>
+              {bans.length===0?<div style={{color:"#3d4460",fontSize:13}}>No active bans.</div>:
+                <div style={{display:"flex",flexDirection:"column",gap:10,maxWidth:440}}>
+                  {bans.map(b=>{const u=getU(b.userId);return(
+                    <div key={b.userId} style={{background:"#0e1219",border:"1px solid #ff475730",borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",gap:12}}>
+                      <Av user={u} size={36}/>
+                      <div style={{flex:1}}><div style={{color:"#e8eaf0",fontWeight:600,fontSize:14}}>{u?.displayName}</div><div style={{fontSize:11,color:"#6b7299"}}>{b.reason||"No reason"} · {b.until==="perm"?"Permanent":"Temporary"}</div></div>
+                      <Btn onClick={()=>doUnban(b.userId)} v="success" sm>Unban</Btn>
+                    </div>
+                  );})}
+                </div>}
+            </>}
+            {adminTab==="addadmin"&&<div style={{maxWidth:380}}>
+              <div style={{background:"#0e1219",borderRadius:12,padding:20,border:"1px solid #1e2535"}}>
+                <Field label="Username *" value={addAdmF.u} onChange={v=>setAddAdmF(p=>({...p,u:v}))} placeholder="owner"/>
+                <Field label="Display Name" value={addAdmF.dn} onChange={v=>setAddAdmF(p=>({...p,dn:v}))} placeholder="te-code-owner"/>
+                <Field label="Password *" type="password" value={addAdmF.p} onChange={v=>setAddAdmF(p=>({...p,p:v}))} placeholder="••••••••"/>
+                <Btn onClick={doAddAdmin} full>Create Admin Account</Btn>
+                <div style={{fontSize:11,color:"#3d4460",marginTop:10}}>Defaults: username "owner", display name "te-code-owner", no profile picture.</div>
+              </div>
+            </div>}
+            {adminTab==="switch"&&<div style={{display:"flex",flexDirection:"column",gap:10,maxWidth:380}}>
+              <div style={{fontSize:13,color:"#6b7299",marginBottom:4}}>Switch between admin accounts instantly.</div>
+              {users.filter(u=>u.isAdmin).map(u=>(
+                <div key={u.id} style={{background:"#0e1219",border:`1px solid ${u.id===me.id?"#ffa50240":"#1e2535"}`,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
+                  <Av user={u} size={44}/>
+                  <div style={{flex:1}}><div style={{color:"#e8eaf0",fontWeight:600,fontSize:15}}>{u.displayName}</div><div style={{fontSize:12,color:"#6b7299"}}>@{u.username}</div></div>
+                  {u.id===me.id?<span style={{fontSize:11,background:"#ffa50218",color:"#ffa502",borderRadius:4,padding:"3px 10px"}}>Current</span>:<Btn onClick={()=>{setMe({...u});showT(`Switched to ${u.displayName}`,"success");}} v="muted" sm>Switch</Btn>}
+                </div>
+              ))}
+            </div>}
+          </div>
+        </div>
+        {toast&&<Toast {...toast}/>}
+      </div>
+    );
+  }
+
+  /* ── RENDER DASHBOARD ── */
+  if(view==="dashboard"){
+    const frList=myFr();const inReqs=myReqs();
+    const allOther=users.filter(u=>u.id!==me.id&&u.id!=="__ai__");
+    const searched=uSearch.trim()?allOther.filter(u=>u.username.includes(uSearch)||u.displayName.toLowerCase().includes(uSearch.toLowerCase())):[];
+    const mob=isMobile();
+    return(
+      <div style={{display:"flex",height:"100vh",background:"#07090f",overflow:"hidden",position:"relative"}}>
+        {sidebar&&mob&&<div onClick={()=>setSidebar(false)} style={{position:"fixed",inset:0,background:"#000a",zIndex:40}}/>}
+        {/* Sidebar */}
+        <div style={{position:mob?"fixed":"relative",left:0,top:0,bottom:0,zIndex:50,width:260,background:"#0a0c14",borderRight:"1px solid #1e2535",display:"flex",flexDirection:"column",transform:mob?(sidebar?"translateX(0)":"translateX(-100%)"):"translateX(0)",transition:"transform .25s",flexShrink:0}}>
+          <div style={{padding:"14px 16px",borderBottom:"1px solid #1e2535",display:"flex",alignItems:"center",gap:10}}>
+            <div style={{flex:1,fontFamily:"Oxanium,monospace",fontWeight:800,fontSize:22,background:"linear-gradient(135deg,#4facfe,#00f2fe)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>tecode</div>
+          </div>
+          {/* Me */}
+          <div style={{padding:"12px 16px",borderBottom:"1px solid #1e2535",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>{setViewProf(me);setSidebar(false);}}>
+            <div style={{position:"relative"}}><Av user={me} size={38}/><Dot on sx={{position:"absolute",bottom:0,right:0,width:10,height:10}}/></div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:600,color:"#e8eaf0",fontSize:14,fontFamily:"Oxanium,monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{me.displayName}</div>
+              <div style={{color:"#4b5273",fontSize:11,display:"flex",gap:4,alignItems:"center"}}>@{me.username}{me.isAdmin&&<span style={{fontSize:10,background:"#ffa50220",color:"#ffa502",borderRadius:3,padding:"0 5px"}}>Admin</span>}</div>
+            </div>
+          </div>
+          <nav style={{flex:1,overflowY:"auto",padding:"8px 0"}}>
+            {[{id:"friends",l:"Friends",ic:"👥"},{id:"requests",l:"Requests",ic:"📩",badge:inReqs.length},{id:"search",l:"Find People",ic:"🔍"}].map(t=>(
+              <button key={t.id} onClick={()=>{setDashTab(t.id);setSidebar(false);}} style={{width:"100%",padding:"10px 16px",background:dashTab===t.id?"#1e2535":"transparent",border:"none",display:"flex",alignItems:"center",gap:12,cursor:"pointer",color:dashTab===t.id?"#4facfe":"#7a8499",fontSize:14,fontFamily:"Jost,sans-serif",transition:"all .15s"}}>
+                <span style={{fontSize:15}}>{t.ic}</span>{t.l}{t.badge>0&&<span style={{marginLeft:"auto",background:"#ff4757",color:"#fff",borderRadius:"50%",width:18,height:18,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11}}>{t.badge}</span>}
+              </button>
+            ))}
+            <div style={{padding:"10px 16px 4px 16px",marginTop:8}}>
+              <div style={{fontSize:10,color:"#2d3450",letterSpacing:2,textTransform:"uppercase",fontFamily:"Oxanium,monospace"}}>Direct Messages</div>
+            </div>
+            <button onClick={()=>openChat("__ai__")} style={{width:"100%",padding:"8px 16px",background:"transparent",border:"none",display:"flex",alignItems:"center",gap:10,cursor:"pointer",color:"#7a8499",fontSize:14,fontFamily:"Jost,sans-serif",transition:"background .15s"}} onMouseEnter={e=>e.currentTarget.style.background="#1e2535"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              <Av user={AI_BOT} size={28}/><span style={{flex:1,textAlign:"left"}}>Tecode AI</span><span style={{width:7,height:7,borderRadius:"50%",background:"#4facfe"}}/>
+            </button>
+            {frList.map(u=>(
+              <button key={u.id} onClick={()=>openChat(u.id)} style={{width:"100%",padding:"8px 16px",background:"transparent",border:"none",display:"flex",alignItems:"center",gap:10,cursor:"pointer",color:"#7a8499",fontSize:14,fontFamily:"Jost,sans-serif",transition:"background .15s"}} onMouseEnter={e=>e.currentTarget.style.background="#1e2535"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <div style={{position:"relative",flexShrink:0}}><Av user={u} size={28}/><Dot on={u.online} sx={{position:"absolute",bottom:-1,right:-1,width:8,height:8}}/></div>
+                <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.displayName}</span>
+              </button>
+            ))}
+          </nav>
+          <div style={{borderTop:"1px solid #1e2535",padding:"10px 12px",display:"flex",gap:8,flexWrap:"wrap"}}>
+            <Btn onClick={()=>{setProfEdit({dn:me.displayName,un:me.username,bio:me.bio,pic:me.pic,banner:me.banner,curPw:"",newPw:"",conPw:""});setView("profile");setSidebar(false);}} v="ghost" sm>⚙ Profile</Btn>
+            {me.isAdmin&&<Btn onClick={()=>{setView("admin");setSidebar(false);}} v="muted" sm>🛡 Admin</Btn>}
+            <Btn onClick={()=>{setMe(null);setView("login");}} v="danger" sm>Exit</Btn>
+          </div>
+        </div>
+        {/* Main */}
+        <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          <div style={{padding:"0 16px",height:56,background:"#0a0c14",borderBottom:"1px solid #1e2535",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+            {mob&&<button onClick={()=>setSidebar(p=>!p)} style={{background:"none",border:"none",color:"#7a8499",fontSize:22,cursor:"pointer",padding:"4px 6px"}}>☰</button>}
+            <div style={{flex:1,fontFamily:"Oxanium,monospace",fontWeight:700,color:"#e8eaf0",fontSize:16}}>{{friends:"Friends",requests:"Friend Requests",search:"Find People"}[dashTab]}</div>
+            {me.isAdmin&&<Btn onClick={()=>setView("admin")} v="muted" sm>🛡 Admin</Btn>}
+          </div>
+          <div style={{flex:1,overflowY:"auto",padding:20}}>
+            {/* FRIENDS */}
+            {dashTab==="friends"&&(frList.length===0?
+              <div style={{textAlign:"center",color:"#3d4460",marginTop:80,fontFamily:"Oxanium,monospace"}}>
+                <div style={{fontSize:52,marginBottom:14}}>👥</div>
+                <div style={{fontSize:20,fontWeight:700}}>No friends yet</div>
+                <div style={{fontSize:13,marginTop:6,color:"#2d3450"}}>Search for people to connect with</div>
+                <Btn onClick={()=>setDashTab("search")} v="ghost" sx={{marginTop:20}}>Find People →</Btn>
+              </div>:
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
+                {frList.map(u=>(
+                  <div key={u.id} style={{background:"#0e1219",border:"1px solid #1e2535",borderRadius:14,overflow:"hidden",transition:"border-color .2s,transform .2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#4facfe30";e.currentTarget.style.transform="translateY(-2px)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#1e2535";e.currentTarget.style.transform="none";}}>
+                    <div style={{height:64,background:bnr(u.banner||"g0")}}/>
+                    <div style={{padding:"0 14px 14px"}}>
+                      <div style={{position:"relative",display:"inline-block",marginTop:-28,marginBottom:8}}>
+                        <Av user={u} size={52} sx={{border:"3px solid #0e1219"}}/>
+                        <Dot on={u.online} sx={{position:"absolute",bottom:2,right:2,border:"2px solid #0e1219"}}/>
+                      </div>
+                      <div style={{fontWeight:700,color:"#e8eaf0",fontSize:15,fontFamily:"Oxanium,monospace"}}>{u.displayName}</div>
+                      <div style={{color:"#4b5273",fontSize:12,marginBottom:4}}>@{u.username}</div>
+                      {u.bio&&<div style={{color:"#6b7299",fontSize:13,marginBottom:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.bio}</div>}
+                      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                        <Btn onClick={()=>openChat(u.id)} v="primary" sm>💬 Chat</Btn>
+                        <Btn onClick={()=>setViewProf(u)} v="ghost" sm>Profile</Btn>
+                        <Btn onClick={()=>removeFr(u.id)} v="danger" sm>×</Btn>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* REQUESTS */}
+            {dashTab==="requests"&&(inReqs.length===0?
+              <div style={{textAlign:"center",color:"#3d4460",marginTop:80,fontFamily:"Oxanium,monospace"}}><div style={{fontSize:52,marginBottom:14}}>📩</div><div style={{fontSize:20,fontWeight:700}}>No pending requests</div></div>:
+              <div style={{maxWidth:460,display:"flex",flexDirection:"column",gap:10}}>
+                {inReqs.map(r=>{const from=getU(r.from);const left=cdLeft(cds,r.from,me.id);return(
+                  <div key={r.id} style={{background:"#0e1219",border:"1px solid #1e2535",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,animation:"fadeIn .2s"}}>
+                    <Av user={from} size={46}/>
+                    <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,color:"#e8eaf0",fontSize:15}}>{from?.displayName}</div><div style={{color:"#4b5273",fontSize:12}}>@{from?.username}</div>{left>0&&<div style={{color:"#ffa502",fontSize:11,marginTop:3}}>⏱ Cooldown: {left}s</div>}</div>
+                    <div style={{display:"flex",gap:8}}><Btn onClick={()=>acceptReq(r.id)} v="success" sm>✓ Accept</Btn><Btn onClick={()=>ignoreReq(r.id)} v="danger" sm>Ignore</Btn></div>
+                  </div>
+                );})}
+              </div>
+            )}
+            {/* SEARCH */}
+            {dashTab==="search"&&<>
+              <Field value={uSearch} onChange={setUSearch} placeholder="Search by username or name…" sx={{maxWidth:440,marginBottom:16}}/>
+              {uSearch.trim()&&(searched.length===0?<div style={{color:"#3d4460",textAlign:"center",marginTop:40}}>No users found</div>:
+                <div style={{display:"flex",flexDirection:"column",gap:10,maxWidth:440}}>
+                  {searched.map(u=>{const fr=isFr(me.id,u.id);const sent=reqs.find(r=>r.from===me.id&&r.to===u.id);const left=cdLeft(cds,me.id,u.id);return(
+                    <div key={u.id} style={{background:"#0e1219",border:"1px solid #1e2535",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,animation:"fadeIn .15s"}}>
+                      <div style={{position:"relative"}}><Av user={u} size={46}/><Dot on={u.online} sx={{position:"absolute",bottom:0,right:0}}/></div>
+                      <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,color:"#e8eaf0",fontSize:15}}>{u.displayName}</div><div style={{color:"#4b5273",fontSize:12}}>@{u.username}</div>{left>0&&<div style={{color:"#ffa502",fontSize:11,marginTop:3}}>⏱ {left}s cooldown</div>}</div>
+                      <div>{fr?<Btn onClick={()=>openChat(u.id)} v="primary" sm>Chat</Btn>:sent?<span style={{fontSize:11,color:"#ffa502",background:"#ffa50218",borderRadius:4,padding:"4px 10px"}}>Sent</span>:left>0?<span style={{fontSize:11,color:"#ffa502",background:"#ffa50218",borderRadius:4,padding:"4px 10px"}}>{left}s</span>:<Btn onClick={()=>sendReq(u.id)} v="ghost" sm>Add +</Btn>}</div>
+                    </div>
+                  );})}
+                </div>
+              )}
+            </>}
+          </div>
+        </div>
+        {toast&&<Toast {...toast}/>}
+      </div>
+    );
+  }
+
+  /* ── RENDER CHAT ── */
+  if(view==="chat"){
+    const peer=getU(chatPeer);const convList=convMs(chatPeer);const isAI=chatPeer==="__ai__";
+    const T=incog?{bg:"#fff0f5",hdr:"#ffe4ef",bdr:"#ffb3d1",acc:"#ff69b4",txt:"#5a1a33",muted:"#a05070",bMeTxt:"#fff",bMe:"#ff85c2",bThm:"#ffc0d9",bThmTxt:"#4a1228",inp:"#ffe4ef"}:{bg:"#07090f",hdr:"#0a0c14",bdr:"#1e2535",acc:"#4facfe",txt:"#e8eaf0",muted:"#6b7299",bMeTxt:"#07090f",bMe:"linear-gradient(135deg,#4facfe,#00f2fe)",bThm:"#1e2535",bThmTxt:"#e8eaf0",inp:"#0e1219"};
+    return(
+      <div style={{display:"flex",flexDirection:"column",height:"100vh",background:T.bg,transition:"background .35s"}}>
+        {/* Header */}
+        <div style={{padding:"0 14px",height:58,background:T.hdr,borderBottom:`1px solid ${T.bdr}`,display:"flex",alignItems:"center",gap:12,flexShrink:0,transition:"background .35s"}}>
+          <button onClick={()=>setView("dashboard")} style={{background:"none",border:"none",color:T.acc,cursor:"pointer",fontSize:20,padding:"4px 8px"}}>←</button>
+          <div style={{position:"relative",cursor:"pointer"}} onClick={()=>setViewProf(peer)}><Av user={peer} size={36}/>{peer?.online&&<Dot on sx={{position:"absolute",bottom:0,right:0,width:9,height:9}}/>}</div>
+          <div style={{flex:1,cursor:"pointer"}} onClick={()=>setViewProf(peer)}>
+            <div style={{fontWeight:700,color:T.txt,fontSize:15,fontFamily:"Oxanium,monospace"}}>{peer?.displayName}</div>
+            <div style={{fontSize:11,color:peer?.online?"#2ed573":T.muted}}>{peer?.online?"● Online":"○ Offline"}</div>
+          </div>
+          {!isAI&&<>
+            <button title="Voice Call" onClick={()=>{setCallUI({type:"audio",state:"calling",peer:chatPeer});setCallSec(0);setTimeout(()=>setCallUI(p=>p?{...p,state:"active"}:null),2000);}} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:18,padding:"4px"}}>📞</button>
+            <button title="Video Call" onClick={()=>{setCallUI({type:"video",state:"calling",peer:chatPeer});setCallSec(0);setTimeout(()=>setCallUI(p=>p?{...p,state:"active"}:null),2000);}} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:18,padding:"4px"}}>📹</button>
+          </>}
+          {!isAI&&<button onClick={()=>setIncog(p=>!p)} title="Incognito" style={{background:incog?"#ff69b420":"transparent",border:`1px solid ${incog?"#ff69b460":"transparent"}`,borderRadius:8,color:incog?"#ff69b4":T.muted,cursor:"pointer",padding:"6px 10px",fontSize:15,transition:"all .2s"}}>👻</button>}
+        </div>
+        {incog&&<div style={{background:"#ff69b418",borderBottom:"1px solid #ff69b430",padding:"5px 16px",fontSize:12,color:"#ff85c2",display:"flex",alignItems:"center",gap:8}}>
+          <span>👻</span><strong>Incognito</strong> — Messages vanish after being seen
+        </div>}
+        {/* Messages */}
+        <div style={{flex:1,overflowY:"auto",padding:"14px 10px",display:"flex",flexDirection:"column",gap:2}}>
+          {convList.length===0&&<div style={{textAlign:"center",color:T.muted,marginTop:70,fontFamily:"Oxanium,monospace"}}>
+            <Av user={peer} size={64} sx={{margin:"0 auto 14px"}}/>
+            <div style={{fontSize:20,fontWeight:700,color:T.txt}}>{peer?.displayName}</div>
+            <div style={{fontSize:13,marginTop:5}}>{isAI?"Your AI companion. Ask me anything!":"Start the conversation!"}</div>
+          </div>}
+          {convList.map((m,i)=>{
+            const isMe=m.from===me.id;const sender=getU(m.from);
+            const replyMsg=m.reply?convList.find(x=>x.id===m.reply):null;
+            const showAv=!isMe&&(i===0||convList[i-1]?.from!==m.from);
+            if(!isMe&&!m.seen)setTimeout(()=>markSeen(cid(me.id,chatPeer),m.id),700);
+            return(
+              <div key={m.id} style={{display:"flex",flexDirection:"column",alignItems:isMe?"flex-end":"flex-start",marginBottom:showAv?4:0,animation:"fadeIn .12s"}}>
+                {replyMsg&&<div style={{fontSize:11,color:T.muted,padding:"2px 10px",background:T.hdr,borderRadius:6,marginBottom:2,maxWidth:"68%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",borderLeft:`2px solid ${T.acc}`,alignSelf:isMe?"flex-end":"flex-start"}}>↩ {getU(replyMsg.from)?.displayName}: {replyMsg.text}</div>}
+                <div style={{display:"flex",alignItems:"flex-end",gap:8,flexDirection:isMe?"row-reverse":"row"}}>
+                  <div style={{width:28,flexShrink:0}}>{!isMe&&showAv&&<Av user={sender} size={28}/>}</div>
+                  <div style={{maxWidth:"70%"}}>
+                    {showAv&&!isMe&&<div style={{fontSize:11,color:T.muted,marginBottom:3,paddingLeft:2}}>{sender?.displayName}</div>}
+                    <div style={{background:isMe?T.bMe:T.bThm,color:isMe?T.bMeTxt:T.bThmTxt,padding:"9px 13px",borderRadius:isMe?"18px 18px 4px 18px":"18px 18px 18px 4px",fontSize:14,lineHeight:1.5,wordBreak:"break-word",cursor:"pointer",border:incog&&!isMe?"1px solid #ffb3d170":"none"}} onClick={()=>setReplyTo(m.id)} title="Reply">
+                      {m.incog&&<span style={{marginRight:5,fontSize:11}}>⏱</span>}{m.text}
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:4,marginTop:3,justifyContent:isMe?"flex-end":"flex-start"}}>
+                      <span style={{fontSize:10,color:T.muted}}>{tfmt(m.ts)}</span>
+                      {isMe&&<span style={{fontSize:10,color:m.seen?T.acc:T.muted}}>{m.seen?"👁 Seen":"✓"}</span>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {aiLoad&&<div style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0"}}>
+            <Av user={AI_BOT} size={28}/>
+            <div style={{background:"#1e2535",borderRadius:"18px 18px 18px 4px",padding:"10px 14px",display:"flex",gap:5,alignItems:"center"}}>
+              {[0,1,2].map(i=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:"#4facfe",animation:"pulse 1.2s infinite",animationDelay:`${i*.2}s`}}/>)}
+            </div>
+          </div>}
+          <div ref={msgEnd}/>
+        </div>
+        {replyTo&&<div style={{padding:"6px 12px",background:T.hdr,borderTop:`1px solid ${T.bdr}`,display:"flex",alignItems:"center",gap:8}}>
+          <div style={{flex:1,fontSize:12,color:T.muted,borderLeft:`2px solid ${T.acc}`,paddingLeft:8,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>↩ {convList.find(m=>m.id===replyTo)?.text}</div>
+          <button onClick={()=>setReplyTo(null)} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:18}}>×</button>
+        </div>}
+        <div style={{padding:"10px 12px",background:T.hdr,borderTop:`1px solid ${T.bdr}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+          {incog&&<span style={{fontSize:18}}>👻</span>}
+          <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&sendMsg()}
+            placeholder={incog?"Ghost message (self-destructs on view)…":"Type a message…"}
+            style={{flex:1,background:T.inp,border:`1px solid ${T.bdr}`,borderRadius:24,padding:"10px 16px",color:T.txt,fontSize:14,fontFamily:"Jost,sans-serif",outline:"none",transition:"border-color .2s"}}
+            onFocus={e=>e.target.style.borderColor=T.acc} onBlur={e=>e.target.style.borderColor=T.bdr}/>
+          <button onClick={sendMsg} style={{width:42,height:42,borderRadius:"50%",background:incog?"linear-gradient(135deg,#ff85c2,#ff69b4)":"linear-gradient(135deg,#4facfe,#00f2fe)",border:"none",cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↑</button>
+        </div>
+        {/* Call overlay */}
+        {callUI&&<div style={{position:"absolute",inset:0,background:"#000000d8",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}}>
+          <div style={{background:"#0e1219",borderRadius:20,padding:40,textAlign:"center",border:"1px solid #1e2535",minWidth:280,animation:"fadeIn .2s"}}>
+            <Av user={peer} size={80} sx={{margin:"0 auto 16px"}}/>
+            <div style={{fontFamily:"Oxanium,monospace",fontWeight:700,fontSize:20,color:"#e8eaf0",marginBottom:6}}>{peer?.displayName}</div>
+            <div style={{color:"#6b7299",fontSize:13,marginBottom:6}}>{callUI.type==="video"?"Video Call":"Voice Call"}</div>
+            <div style={{color:"#4facfe",fontSize:18,marginBottom:28,fontFamily:"Oxanium,monospace"}}>{callUI.state==="calling"?"Calling…":fmtT(callSec)}</div>
+            {callUI.state==="active"&&callUI.type==="video"&&<div style={{background:"#161c28",borderRadius:10,height:130,marginBottom:20,display:"flex",alignItems:"center",justifyContent:"center",color:"#2d3450",fontSize:13}}>📹 Camera feed</div>}
+            <div style={{display:"flex",justifyContent:"center",gap:12,flexWrap:"wrap"}}>
+              {callUI.state==="active"&&<><Btn v="muted" sm>🔇 Mute</Btn>{callUI.type==="video"&&<Btn v="muted" sm>📷 Cam</Btn>}<Btn v="muted" sm>🖥 Share</Btn></>}
+              <Btn onClick={()=>setCallUI(null)} v="danger">End Call</Btn>
+            </div>
+          </div>
+        </div>}
+        {toast&&<Toast {...toast}/>}
+      </div>
+    );
+  }
+
+  return null;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(TeCode));
+</script>
+</body>
+</html>
